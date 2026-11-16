@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SnackBiz Calculator</title>
+<style>
+:root{color-scheme:light;--bg:#faf8ef;--card:#fff;--fg:#1a1a17;--mut:#6a6a60;--bd:#e4e0cc;--y:#ffc400;--bad:#b3261e;--ok:#1e7a34;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#151512;--card:#202019;--fg:#f5f3e8;--mut:#a9a796;--bd:#38372c;--bad:#ff8a80;--ok:#7fd68f}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#151512;--card:#202019;--fg:#f5f3e8;--mut:#a9a796;--bd:#38372c;--bad:#ff8a80;--ok:#7fd68f}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Trebuchet MS",system-ui,sans-serif}
+header{background:var(--y);color:#141410;padding:14px 16px 0}
+header h1{margin:0;font:800 22px Georgia,serif}header p{margin:2px 0 10px;font-size:13px}
+nav{display:flex;gap:4px;overflow-x:auto;padding-top:4px}
+nav button{border:0;background:transparent;color:#141410;padding:9px 12px;font:600 14px inherit;white-space:nowrap;border-radius:8px 8px 0 0;cursor:pointer}
+nav button.on{background:var(--bg);color:var(--fg)}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h2{font:700 20px Georgia,serif;margin:4px 0 12px}h3{font-size:15px;margin:18px 0 8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px}
+.card small{color:var(--mut);display:block}.card b{font-size:18px}
+.box{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:14px}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;align-items:end}
+label{display:flex;flex-direction:column;font-size:13px;color:var(--mut);gap:3px}
+input,select,textarea{font:inherit;padding:8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--fg);width:100%}
+button.b{background:var(--y);color:#141410;border:0;border-radius:6px;padding:9px 14px;font:700 14px inherit;cursor:pointer}
+button.g{background:transparent;color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:5px 9px;cursor:pointer;font:inherit}
+button.g.x{color:var(--bad);border-color:var(--bad)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--fg);outline-offset:1px}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}th{color:var(--mut);font-weight:600}
+.msg{padding:9px 12px;border-radius:8px;background:var(--y);color:#141410;margin-bottom:12px;font-weight:600}
+.warn{color:var(--bad)}.ok{color:var(--ok)}.mut{color:var(--mut)}
+.br{display:grid;grid-template-columns:110px 1fr auto;gap:8px;align-items:center;margin:6px 0;font-size:13px}
+.br i{display:block;height:14px;border-radius:4px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+textarea{min-height:120px;font:12px monospace}
+</style></head><body>
+<header><h1>SnackBiz Calculator</h1><p>Hitung Modal, Atur Produksi, Maksimalkan Keuntungan.</p><nav id="nav"></nav></header>
+<main id="app"></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const K='snackbiz.v1',$=s=>document.querySelector(s),v=id=>$('#'+id).value;
+const rp=n=>'Rp'+new Intl.NumberFormat('id-ID',{maximumFractionDigits:2}).format(n||0);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
+const today=()=>new Date().toISOString().slice(0,10),fl=x=>Math.floor(x+1e-9);
+function demo(){const d=today(),s={harga:3000,tm:40,nid:100,buy:[],pack:[{id:1,nama:'Plastik',harga:13000,isi:160}],cost:[{id:1,nama:'Admin transfer',jenis:'tetap',jumlah:2500}],aset:[],prod:[],sale:[]};
+[['Sakura Kriuk',15000],['Tahu Walik',25000],['Q Tela Putih',20000],['Soes Kering',32000]].forEach((x,i)=>s.buy.push({id:i+1,nama:x[0],kategori:'Snack',harga:x[1],gram:500,tanggal:d,ket:'Data demo'}));
+s.buy.forEach(b=>s.prod.push({id:10+b.id,nama:b.nama,tgl:d,packs:25,gpp:20,comp:[{mid:b.id,g:20}],pid:1,matCost:b.harga,packCost:25*13000/160}));return s}
+let S;try{S=JSON.parse(localStorage.getItem(K))}catch(e){}S=S||demo();S.aset=S.aset||[];
+let PAGE='dash',ED=null,CF=null,MSG='';
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};
+const sum=(a,f)=>a.reduce((t,x)=>t+f(x),0);
+const usedMat=id=>sum(S.prod,p=>sum(p.comp.filter(c=>c.mid==id),c=>c.g*p.packs));
+const usedPack=id=>sum(S.prod.filter(p=>p.pid==id),p=>p.packs);
+const soldOf=id=>sum(S.sale.filter(s=>s.pid==id),s=>s.qty);
+
+/* ===== PERHITUNGAN (murni, tanpa tampilan) ===== */
+function calc(S){
+ const buyTotal=sum(S.buy,b=>b.harga),packTotal=sum(S.pack,k=>k.harga),opsCash=sum(S.cost,c=>c.jumlah),assetBuy=sum(S.aset||[],a=>a.harga),dep=sum(S.aset||[],a=>(a.harga-a.sisa)/a.umur*Math.min(a.bulan,a.umur)),ops=opsCash+dep,cashOut=buyTotal+packTotal+opsCash+assetBuy;
+ const fix=sum(S.cost.filter(c=>c.jenis=='tetap'),c=>c.jumlah)+dep,varOps=ops-fix;
+ const um=id=>sum(S.prod,p=>sum(p.comp.filter(c=>c.mid==id),c=>c.g*p.packs)),up=id=>sum(S.prod.filter(p=>p.pid==id),p=>p.packs);
+ const sd=id=>sum(S.sale.filter(s=>s.pid==id),s=>s.qty);
+ const mats=S.buy.map(b=>{const left=b.gram-um(b.id);return{b,used:um(b.id),left,val:left*b.harga/b.gram}});
+ const packs=S.pack.map(k=>{const left=k.isi-up(k.id);return{k,used:up(k.id),left,val:left*k.harga/k.isi}});
+ const made=sum(S.prod,p=>p.packs),mat=sum(S.prod,p=>p.matCost),pk=sum(S.prod,p=>p.packCost);
+ const prodCost=mat+pk+ops,hpp=made?prodCost/made:0,opp=made?ops/made:0;
+ const fin=S.prod.map(p=>({p,left:p.packs-sd(p.id),unit:(p.matCost+p.packCost)/p.packs,sold:sd(p.id)}));
+ const sold=sum(S.sale,s=>s.qty),omzet=sum(S.sale,s=>s.qty*s.harga-s.diskon);
+ const cogs=sum(S.sale,s=>{const f=fin.find(x=>x.p.id==s.pid);return f?s.qty*f.unit:0});
+ const finVal=sum(fin,f=>f.left*f.unit),invVal=sum(mats,m=>m.val)+sum(packs,m=>m.val)+finVal;
+ const varU=made?(mat+pk+varOps)/made:0,mg=S.harga-varU,bep=mg>0?Math.ceil(fix/mg-1e-9):null;
+ const gross=omzet-cogs;
+ return{buyTotal,packTotal,ops,fix,varOps,mats,packs,made,mat,pk,prodCost,hpp,opp,fin,sold,omzet,cogs,finVal,invVal,varU,mg,bep,gross,net:gross-ops,kas:omzet-cashOut,opsCash,assetBuy,dep,cashOut,bookVal:assetBuy-dep,est:S.harga*made-prodCost}}
+const sim=(S,h)=>{const c=calc({...S,harga:h}),b=c.bep;return{h,omzet:h*c.made,bep:b,laba:h*c.made-c.prodCost}};
+function eco(C,P){const Q=C.made,FC=C.fix,VC=C.mat+C.pk+C.varOps,TC=FC+VC,cm=P-C.varU,TR=P*Q;return{Q,FC,VC,TC,AFC:Q?FC/Q:0,AVC:Q?VC/Q:0,ATC:Q?TC/Q:0,TR,pi:TR-TC,cm,cmr:P?cm/P:0,bepU:cm>0?Math.ceil(FC/cm-1e-9):null,bepR:cm>0&&P?FC/(cm/P):null,mos:cm>0&&Q?(Q-Math.ceil(FC/cm-1e-9))/Q:null}}
+function ekoRows(C,P){const E=eco(C,P);return[['Jumlah produksi (Q, pack)',E.Q,'Dibulatkan ke bawah menurut stok','n'],['Harga jual per pack (P)',P,'Input pengguna','rp'],['Biaya tetap total (TFC)',E.FC,'Biaya tetap tunai + penyusutan peralatan','rp'],['Biaya variabel total (TVC)',E.VC,'Bahan + kemasan terpakai + biaya variabel','rp'],['Biaya total (TC)',E.TC,'TC = TFC + TVC','rp'],['Biaya tetap rata-rata (AFC)',E.AFC,'AFC = TFC / Q','rp'],['Biaya variabel rata-rata (AVC)',E.AVC,'AVC = TVC / Q','rp'],['Biaya total rata-rata (ATC = HPP)',E.ATC,'ATC = TC / Q = AFC + AVC','rp'],['Biaya marjinal (MC)',E.AVC,'Tambahan biaya satu pack lagi; tetap karena biaya variabel proporsional','rp'],['Penerimaan total (TR)',E.TR,'TR = P x Q, jika semua terjual','rp'],['Laba / rugi',E.pi,'TR - TC','rp'],['Kontribusi per pack',E.cm,'P - AVC','rp'],['Rasio kontribusi',E.cmr,'(P - AVC) / P','pct'],['BEP (pack)',E.bepU,'TFC / (P - AVC), dibulatkan ke atas','n'],['BEP (rupiah)',E.bepR,'TFC / rasio kontribusi','rp'],['Margin keamanan',E.mos,'(Q - BEP) / Q','pct']]}
+function ekoPage(){const C=calc(S),P=S.harga,E=eco(C,P),fm=(x,k)=>x==null?'-':k=='rp'?rp(x):k=='pct'?(x*100).toFixed(1)+'%':String(x);
+ const st=!E.Q?'<span class="mut">Belum ada produksi, analisis belum bisa dihitung.</span>':P<E.AVC?'<span class="warn">Harga lebih rendah dari AVC ('+rp(E.AVC)+'). Setiap pack yang terjual menambah rugi, bahkan sebelum biaya tetap. Naikkan harga atau hentikan produksi.</span>':P<E.ATC?'<span class="warn">Harga di bawah ATC/HPP ('+rp(E.ATC)+'): rugi, tetapi harga masih menutup AVC dan menyumbang pada biaya tetap. Jangka pendek bisa lanjut, jangka panjang naikkan harga atau tekan biaya.</span>':'<span class="ok">Harga di atas ATC/HPP: laba positif sebesar '+rp(E.pi)+' jika semua pack terjual.</span>';
+ const qs=[...new Set([.25,.5,1,1.5,2].map(f=>Math.max(1,Math.round(E.Q*f))))];
+ return'<h2>Analisis Biaya (Dasar Ekonomi)</h2><div class="box">'+st+'</div>'+tbl(['Besaran','Nilai','Rumus'],ekoRows(C,P).map(r=>[r[0],fm(r[1],r[3]),esc(r[2])]),0)+'<h3>Simulasi skala produksi</h3>'+(E.Q?tbl(['Q (pack)','AFC','AVC','ATC','Laba / rugi'],qs.map(q=>{const a=E.FC/q,t=a+E.AVC;return[q,rp(a),rp(E.AVC),rp(t),rp((P-t)*q)]}),0)+'<p class="mut">Biaya tetap dibagi lebih banyak pack, sehingga ATC turun saat produksi naik. Angka ini simulasi: produksi lebih besar memerlukan bahan dan kemasan tambahan.</p>':'<div class="box mut">Belum ada produksi.</div>')+'<h3>Catatan</h3><div class="box">Biaya tenggelam (sunk cost): uang yang sudah dipakai membeli peralatan tidak ikut menentukan harga atau keputusan produksi berikutnya, kecuali sebagai penyusutan. Bahan dan kemasan yang belum dipakai adalah persediaan (aset), bukan biaya. Tenaga pemilik yang tidak digaji belum terhitung sebagai biaya; masukkan di tab Biaya agar laba lebih realistis.</div>'}
+function ekoTest(){const c=calc(demo()),e=eco(c,3000);return[['TC = TFC + TVC = Rp102.625',e.TC==102625&&e.FC==2500&&e.VC==100125],['ATC = AFC + AVC = Rp1.026,25 (sama dengan HPP)',Math.abs(e.ATC-(e.AFC+e.AVC))<1e-9&&e.ATC==c.hpp],['Laba = TR - TC = Rp197.375',e.pi==197375]]}
+function scaleTest(){const d=demo();d.aset=[{id:1,nama:'Timbangan digital',harga:150000,umur:24,sisa:0,bulan:1,tanggal:'2026-01-01'}];const c=calc(d);return[['Timbangan Rp150.000 / 24 bulan: penyusutan Rp6.250 per bulan',c.dep==6250],['Beli timbangan = uang keluar Rp257.500, biaya produksi Rp108.875',c.cashOut==257500&&c.prodCost==108875],['Nilai buku timbangan Rp143.750',c.bookVal==143750],['Timbangan tidak mengubah stok atau persediaan',c.invVal==calc(demo()).invVal]]}
+function selfTest(){const c=calc(demo()),t=[['Total pembelian bahan = Rp92.000',c.buyTotal==92000],['Total pengeluaran = Rp107.500',c.cashOut==107500],['Produksi = 100 pack (20 g per pack)',c.made==100],['Biaya plastik terpakai Rp8.125',c.pk==8125],['Sisa plastik 60 senilai Rp4.875',c.packs[0].left==60&&c.packs[0].val==4875],['HPP per pack = Rp1.026,25',c.hpp==1026.25],['BEP pada Rp3.000 = 2 pack',c.bep==2],...scaleTest(),...ekoTest()];return t}
+
+/* ===== SKEMA CRUD ===== */
+const SC={
+ buy:{t:'Pembelian Bahan',f:[['nama','Nama bahan','text'],['kategori','Kategori','text',1],['harga','Harga beli (Rp)','num'],['gram','Berat (gram)','num'],['tanggal','Tanggal','date'],['ket','Keterangan','text',1]],h:['Bahan','Kategori','Harga','Berat','Per gram','Tanggal','Sisa'],row:r=>[r.nama,r.kategori,rp(r.harga),r.gram+' g',rp(r.harga/r.gram),r.tanggal,(r.gram-usedMat(r.id))+' g'],def:()=>({tanggal:today()}),chk:(r,id)=>id&&r.gram<usedMat(id)?'Berat tidak boleh kurang dari bahan terpakai ('+usedMat(id)+' g)':'',blk:id=>usedMat(id)>0?'Bahan sudah dipakai produksi. Hapus produksinya dulu.':''},
+ pack:{t:'Kemasan',f:[['nama','Nama kemasan','text'],['harga','Harga beli (Rp)','num'],['isi','Jumlah isi (lembar)','num']],h:['Kemasan','Harga','Isi','Per lembar','Terpakai','Sisa'],row:r=>[r.nama,rp(r.harga),r.isi,rp(r.harga/r.isi),usedPack(r.id),r.isi-usedPack(r.id)],chk:(r,id)=>id&&r.isi<usedPack(id)?'Isi tidak boleh kurang dari kemasan terpakai':'',blk:id=>usedPack(id)>0?'Kemasan sudah dipakai produksi.':''},
+ cost:{t:'Biaya Operasional',f:[['nama','Nama biaya','text'],['jenis','Jenis','sel'],['jumlah','Jumlah (Rp)','num']],h:['Biaya','Jenis','Jumlah'],row:r=>[r.nama,r.jenis,rp(r.jumlah)],def:()=>({jenis:'tetap'})},
+ sale:{t:'Penjualan',f:[['pid','Produk','sel'],['qty','Jumlah (pack)','num'],['harga','Harga satuan (Rp)','num'],['diskon','Diskon total (Rp)','num',1],['metode','Metode','sel'],['tanggal','Tanggal','date'],['ket','Keterangan','text',1]],h:['Tanggal','Produk','Jumlah','Harga','Diskon','Total','Metode'],row:r=>{const p=S.prod.find(x=>x.id==r.pid);return[r.tanggal,p?p.nama:'(dihapus)',r.qty,rp(r.harga),rp(r.diskon),rp(r.qty*r.harga-r.diskon),r.metode]},def:()=>({harga:S.harga,tanggal:today(),metode:'Tunai'}),chk:(r,id)=>{const p=S.prod.find(x=>x.id==r.pid);if(!p)return'Pilih produk (buat produksi dulu)';const o=id?S.sale.find(x=>x.id==id):null,av=p.packs-soldOf(p.id)+(o&&o.pid==p.id?o.qty:0);return r.qty>av?'Stok produk hanya '+av+' pack':r.diskon>r.qty*r.harga?'Diskon melebihi total':''}}};
+SC.aset={t:'Peralatan (Timbangan Digital, dll.)',f:[['nama','Nama peralatan','text'],['harga','Harga beli (Rp)','num'],['umur','Umur manfaat (bulan)','num'],['sisa','Nilai sisa (Rp)','num',1],['bulan','Bulan dipakai periode ini','num'],['tanggal','Tanggal beli','date']],h:['Peralatan','Harga','Umur','Nilai sisa','Susut/bulan','Bulan dipakai','Susut periode ini','Nilai buku'],row:r=>{const m=(r.harga-r.sisa)/r.umur,s=m*Math.min(r.bulan,r.umur);return[r.nama,rp(r.harga),r.umur+' bln',rp(r.sisa),rp(m),r.bulan+' bln',rp(s),rp(r.harga-s)]},def:()=>({tanggal:today(),bulan:1,umur:24}),chk:r=>r.sisa>=r.harga?'Nilai sisa harus lebih kecil dari harga':''};
+function asetPage(){const C=calc(S);return crud('aset')+'<div class="grid">'+card('Uang keluar beli peralatan',rp(C.assetBuy))+card('Penyusutan periode ini',rp(C.dep),'masuk biaya tetap')+card('Nilai buku',rp(C.bookVal))+'</div><p class="mut">Peralatan tidak habis seperti bahan, jadi tidak mengurangi stok. Pembelian dicatat sebagai uang keluar (kas). Yang masuk HPP dan BEP hanya penyusutan: (harga - nilai sisa) / umur manfaat x bulan dipakai, sebagai biaya tetap. Sisanya menjadi nilai buku, bukan persediaan.</p>'}
+const opts=(k,n)=>n=='pid'?S.prod.map(p=>[p.id,p.nama+' (sisa '+(p.packs-soldOf(p.id))+')']):n=='metode'?['Tunai','Transfer','Online','Langsung'].map(x=>[x,x]):[['tetap','tetap'],['variabel','variabel']];
+
+function crud(k){const m=SC[k],e=ED&&ED.k==k?S[k].find(r=>r.id==ED.id):null,d=e||(m.def?m.def():{});
+ const f=m.f.map(([n,l,t])=>{const x=d[n]??'';return'<label>'+l+(t=='sel'?'<select id="f_'+n+'">'+opts(k,n).map(([a,b])=>'<option value="'+esc(a)+'"'+(a==x?' selected':'')+'>'+esc(b)+'</option>').join('')+'</select>':'<input id="f_'+n+'" type="'+(t=='num'?'number" min="0" step="any':t)+'" value="'+esc(x)+'">')+'</label>'}).join('');
+ return'<h2>'+m.t+'</h2><div class="box"><div class="form">'+f+'<button class="b" onclick="submitCrud(\''+k+'\')">'+(e?'Simpan perubahan':'Tambah')+'</button>'+(e?'<button class="g" onclick="ED=null;render()">Batal</button>':'')+'</div></div>'+
+ tbl(m.h,S[k].map(r=>m.row(r).map(esc).concat(['<button class="g" onclick="ED={k:\''+k+'\',id:'+r.id+'};render()">Ubah</button> <button class="g x" onclick="del(\''+k+'\','+r.id+')">'+(CF==k+r.id?'Yakin hapus?':'Hapus')+'</button>'])),1,'Belum ada data. Isi formulir di atas.')}
+function submitCrud(k){const m=SC[k],r={};let err='';
+ m.f.forEach(([n,l,t,o])=>{let x=v('f_'+n).trim();if(t=='num'){x=x===''?0:+x;if(isNaN(x)||x<0)err=l+' tidak valid';else if(!o&&x<=0)err=l+' harus lebih dari 0'}else if(t=='sel')x=isNaN(+x)?x:+x;else if(!o&&!x)err=l+' wajib diisi';r[n]=x});
+ const id=ED&&ED.k==k?ED.id:null;if(!err&&m.chk)err=m.chk(r,id);
+ if(err){MSG=err;return render()}
+ if(id){const i=S[k].findIndex(x=>x.id==id);S[k][i]={...S[k][i],...r};ED=null}else S[k].push({id:S.nid++,...r});
+ MSG='Tersimpan.';save();render()}
+function del(k,id,ty){if(CF!=k+id){CF=k+id;return render()}CF=null;const b=(SC[k]&&SC[k].blk)?SC[k].blk(id):'';if(b){MSG=b;return render()}
+ if(k=='prod'&&soldOf(id)>0){MSG='Produksi sudah punya penjualan. Hapus penjualannya dulu.';return render()}
+ S[k]=S[k].filter(x=>x.id!=id);MSG='Dihapus. Stok dan laporan dihitung ulang.';save();render()}
+function tbl(h,rows,act,empty){if(!rows.length)return'<div class="box mut">'+(empty||'Belum ada data.')+'</div>';return'<div class="tw box"><table><tr>'+h.map(x=>'<th>'+x+'</th>').join('')+(act?'<th></th>':'')+'</tr>'+rows.map(r=>'<tr>'+r.map(x=>'<td>'+x+'</td>').join('')+'</tr>').join('')+'</table></div>'}
+const card=(l,x,s)=>'<div class="card"><small>'+l+'</small><b>'+x+'</b>'+(s?'<small>'+s+'</small>':'')+'</div>';
+const bars=a=>{const m=Math.max(...a.map(x=>x[1]),1);return a.map(([l,x,c])=>'<div class="br"><span>'+l+'</span><i style="width:'+Math.max(2,Math.max(0,x)/m*100)+'%;background:'+(c||'var(--y)')+'"></i><b>'+rp(x)+'</b></div>').join('')};
+
+/* ===== PRODUKSI ===== */
+function prodPage(){const C=calc(S);
+ const ml=C.mats.map(m=>'<tr><td><input type="checkbox" id="c_'+m.b.id+'" style="width:auto"> '+esc(m.b.nama)+'</td><td>'+m.left+' g</td><td><input id="g_'+m.b.id+'" type="number" min="0" step="any" value="20" style="width:90px"></td></tr>').join('');
+ return'<h2>Produksi</h2>'+'<div class="box"><div class="form"><label>Mode<select id="p_mode"><option value="t">Terpisah (1 bahan = 1 pack)</option><option value="c">Campuran (beberapa bahan / pack)</option></select></label><label>Berat per pack (g), mode terpisah<input id="p_gpp" type="number" min="0" step="any" value="20"></label><label>Kemasan<select id="p_pack">'+S.pack.map(k=>'<option value="'+k.id+'">'+esc(k.nama)+' (sisa '+(k.isi-usedPack(k.id))+')</option>').join('')+'</select></label><label>Nama produk campuran<input id="p_nm" placeholder="mis. Mix Snack"></label><label>Jumlah pack (kosong = maksimal)<input id="p_n" type="number" min="0"></label></div>'+
+ '<div class="tw"><table><tr><th>Bahan (centang)</th><th>Stok</th><th>Gram per pack (campuran)</th></tr>'+ml+'</table></div><div class="row"><button class="b" onclick="doProd()">Proses produksi</button></div><p class="mut">Jumlah pack dibulatkan ke bawah menurut bahan yang paling cepat habis dan sisa kemasan. Stok bahan dan kemasan berkurang satu kali saat produksi.</p></div>'+
+ tbl(['Tanggal','Produk','Pack','Gram/pack','Biaya bahan','Biaya kemasan','HPP bahan+kemasan/pack'],S.prod.map(p=>[p.tgl,esc(p.nama),p.packs,p.gpp,rp(p.matCost),rp(p.packCost),rp((p.matCost+p.packCost)/p.packs)+' <button class="g x" onclick="del(\'prod\','+p.id+')">'+(CF=='prod'+p.id?'Yakin hapus?':'Hapus')+'</button>']),0,'Belum ada produksi.')}
+function doProd(){const C=calc(S),mode=v('p_mode'),gpp=+v('p_gpp'),pid=+v('p_pack'),req=v('p_n')===''?null:+v('p_n');
+ const pk=C.packs.find(x=>x.k.id==pid),sel=C.mats.filter(m=>$('#c_'+m.b.id).checked);
+ if(!pk)return err('Tambahkan kemasan dulu.');if(!sel.length)return err('Pilih minimal satu bahan.');if(req!==null&&(isNaN(req)||req<0))return err('Jumlah pack tidak valid.');
+ let pl=pk.left;const out=[];
+ const mk=(nama,comp,n)=>{const mc=sum(comp,c=>c.g*n*S.buy.find(b=>b.id==c.mid).harga/S.buy.find(b=>b.id==c.mid).gram);S.prod.push({id:S.nid++,nama,tgl:today(),packs:n,gpp:sum(comp,c=>c.g),comp,pid,matCost:mc,packCost:n*pk.k.harga/pk.k.isi});pl-=n;out.push(nama+': '+n+' pack')};
+ if(mode=='t'){if(!(gpp>0))return err('Berat per pack harus lebih dari 0.');
+  sel.forEach(m=>{const mx=Math.min(fl(m.left/gpp),pl),n=req===null?mx:Math.min(req,mx);if(n>=1)mk(m.b.nama,[{mid:m.b.id,g:gpp}],n)})}
+ else{const comp=sel.map(m=>({mid:m.b.id,g:+v('g_'+m.b.id)}));if(comp.some(c=>!(c.g>0)))return err('Isi gram per pack untuk semua bahan terpilih.');
+  const mx=Math.min(pl,...comp.map(c=>fl(C.mats.find(m=>m.b.id==c.mid).left/c.g))),n=req===null?mx:Math.min(req,mx);if(n>=1)mk(v('p_nm').trim()||'Campuran',comp,n)}
+ if(!out.length)return err('Stok bahan atau kemasan tidak cukup untuk satu pack.');MSG='Produksi dicatat. '+out.join(', ');save();render()}
+const err=m=>{MSG=m;render()};
+
+/* ===== HALAMAN ===== */
+function dash(){const C=calc(S),pr=C.bep?Math.min(100,C.sold/C.bep*100):0;
+ return'<h2>Dashboard</h2><div class="grid">'+card('Pengeluaran pembelian',rp(C.buyTotal+C.packTotal),'bahan + kemasan')+card('Nilai persediaan',rp(C.invVal))+card('Biaya produksi',rp(C.prodCost),'bahan+kemasan terpakai+operasional')+card('Produk tersedia',C.fin.reduce((t,f)=>t+f.left,0)+' pack')+card('HPP per pack (ATC)',rp(C.hpp))+card('Harga jual',rp(S.harga))+card('Target BEP',C.bep==null?'Rugi per pack':C.bep+' pack')+card('Estimasi laba',rp(C.est),'jika semua terjual')+card('Omzet',rp(C.omzet))+card('Produk terjual',C.sold+' pack')+'</div>'+
+ '<h3>Modal vs omzet</h3><div class="box">'+bars([['Modal',C.cashOut,'var(--fg)'],['Omzet',C.omzet]])+'</div><h3>HPP vs harga jual</h3><div class="box">'+bars([['HPP',C.hpp,'var(--fg)'],['Harga jual',S.harga]])+'</div><h3>Pencapaian BEP</h3><div class="box"><div class="br" style="grid-template-columns:1fr auto"><i style="width:'+Math.max(1,pr)+'%;background:var(--y)"></i><b>'+Math.round(pr)+'%</b></div></div>'+
+ '<h3>Evaluasi</h3><div class="box">'+evalu(C)+'</div>'}
+function evalu(C){const L=[];if(C.mg<=0)L.push('<span class="warn">Harga jual tidak menutup biaya variabel per pack ('+rp(C.varU)+'). Naikkan harga.</span>');else if(S.harga<C.hpp)L.push('<span class="warn">Harga jual di bawah HPP ('+rp(C.hpp)+').</span>');
+ if(S.sale.length<3)L.push('<span class="mut">Data penjualan belum cukup (kurang dari 3 transaksi). Rekomendasi masih estimasi.</span>');else{const by={};S.sale.forEach(s=>{by[s.pid]=(by[s.pid]||0)+s.qty});const t=Object.entries(by).sort((a,b)=>b[1]-a[1])[0],p=S.prod.find(x=>x.id==t[0]);if(p)L.push('Terlaris: '+esc(p.nama)+' ('+t[1]+' pack).')}
+ C.mats.forEach(m=>{if(m.left<=0)L.push('Bahan '+esc(m.b.nama)+' habis, perlu dibeli lagi.');else if(m.left<=m.b.gram*.1)L.push('Bahan '+esc(m.b.nama)+' hampir habis.')});
+ C.packs.forEach(p=>{if(p.left<=p.k.isi*.1)L.push('Kemasan '+esc(p.k.nama)+' hampir habis.')});return L.map(x=>'<div>'+x+'</div>').join('')}
+function wt(g){const C=calc(S),P=S.harga,pk=S.pack[0],unit=pk?pk.harga/pk.isi:0;let Q=0,mat=0;S.buy.forEach(b=>{const n=fl(b.gram/g);Q+=n;mat+=n*g*b.harga/b.gram});if(!Q)return null;const pc=Q*unit,tc=mat+pc+C.ops,vu=(mat+pc+C.varOps)/Q,h=tc/Q,cm=P-vu;return{g,Q,hpp:h,untung:P-h,mg:P?(P-h)/P:0,bep:cm>0?Math.ceil(C.fix/cm-1e-9):null,laba:P*Q-tc,butuh:pk?Math.max(0,Q-pk.isi):0}}
+function beratSim(){if(!S.buy.length)return'';const tm=S.tm||40,gs=[15,20,25,30,35,40];let mx=0;for(let g=5;g<=100;g++){const r=wt(g);if(r&&r.mg>=tm/100)mx=g}
+ return'<h3>Simulasi berat per pack</h3><p class="mut">Pada harga '+rp(S.harga)+', semua bahan dipakai (dibulatkan ke bawah), produksi terpisah. Berat lebih kecil membuat HPP per pack turun dan jumlah pack naik.</p>'+tbl(['Berat/pack','Pack','HPP','Untung/pack','Margin','BEP','Laba total','Plastik'],gs.map(g=>{const r=wt(g);return r?[g+' g'+(g==20?' (dipilih)':''),r.Q,rp(r.hpp),rp(r.untung),(r.mg*100).toFixed(1)+'%',r.bep==null?'tidak tercapai':r.bep+' pack',rp(r.laba),r.butuh?'<span class="warn">kurang '+r.butuh+'</span>':'cukup']:[g+' g','-','-','-','-','-','-','-']}),0)+'<div class="box">Berat maksimal agar margin minimal '+tm+'% pada harga '+rp(S.harga)+': <b>'+(mx?mx+' g':'tidak ada')+'</b>. Ubah harga atau target margin di atas untuk mencoba skenario lain.</div>'}
+function setRs(){const pid=+v('r_p'),e=+v('r_e'),r=+v('r_r'),q=+v('r_q');if([e,r,q].some(x=>isNaN(x)||x<0))return err('Angka tidak boleh negatif.');S.rs={pid,ecer:e,res:r,qty:S.rs&&S.rs.pid==pid?q:0};save();render()}
+function resPage(){S.rs=S.rs||{ecer:2000,res:1500};const R=S.rs,C=calc(S);if(!C.fin.length)return'<h2>Harga Reseller</h2><div class="box mut">Catat produksi dulu agar HPP produk bisa dihitung.</div>';
+ const f=C.fin.find(x=>x.p.id==R.pid)||C.fin[0],p=f.p,hpp=f.unit+C.opp,q=R.qty>0?R.qty:p.packs,d=R.ecer-R.res;
+ const row=(l,pr)=>{const u=pr-hpp;return[l,rp(pr),rp(u),pr?(u/pr*100).toFixed(1)+'%':'-',rp(pr*q),rp(u*q)]};
+ const w=R.res<f.unit?'<span class="warn">Harga reseller di bawah biaya bahan+kemasan per pack ('+rp(f.unit)+'). Setiap penjualan rugi.</span>':R.res<hpp?'<span class="warn">Harga reseller di bawah HPP ('+rp(hpp)+'): rugi setelah biaya operasional.</span>':R.res>=R.ecer?'<span class="warn">Harga reseller sama atau lebih tinggi dari harga jual sendiri.</span>':'<span class="ok">Harga reseller masih di atas HPP.</span>';
+ return'<h2>Harga Reseller</h2><div class="box"><div class="form"><label>Produk<select id="r_p" onchange="setRs()">'+C.fin.map(x=>'<option value="'+x.p.id+'"'+(x.p.id==p.id?' selected':'')+'>'+esc(x.p.nama)+'</option>').join('')+'</select></label><label>Harga jual sendiri (Rp)<input id="r_e" type="number" min="0" value="'+R.ecer+'" onchange="setRs()"></label><label>Harga reseller (Rp)<input id="r_r" type="number" min="0" value="'+R.res+'" onchange="setRs()"></label><label>Jumlah pack<input id="r_q" type="number" min="1" value="'+q+'" onchange="setRs()"></label></div></div>'+
+ '<div class="grid">'+card('HPP per pack',rp(hpp),'bahan + kemasan + operasional')+card('Selisih harga',rp(d),'per pack')+card('Selisih laba',rp(d*q),'untuk '+q+' pack')+card('Untung reseller',rp(d),R.ecer?'jika dijual '+rp(R.ecer)+' ('+(d/R.ecer*100).toFixed(1)+'%)':'')+'</div><div class="box">'+w+'</div>'+
+ tbl(['Skema','Harga','Untung/pack','Margin','Omzet','Laba'],[row('Jual sendiri',R.ecer),row('Jual ke reseller',R.res)],0)+(()=>{const mb=p.matCost*q/p.packs,fc=hpp*q,rr=(l,pr)=>{const om=pr*q;return[l,rp(om),rp(om-mb),mb?((om-mb)/mb*100).toFixed(0)+'%':'-',mb?(om/mb).toFixed(2)+'x':'-',rp(om-fc),fc?((om-fc)/fc*100).toFixed(0)+'%':'-']};return'<h3>Dibanding modal awal bahan ('+rp(mb)+')</h3>'+tbl(['Skema','Omzet','Laba atas modal bahan','ROI bahan','Omzet / modal bahan','Laba penuh (HPP)','ROI penuh'],[rr('Jual sendiri',R.ecer),rr('Jual ke reseller',R.res)],0)})()+'<p class="mut">Laba dihitung dari harga dikurangi HPP penuh produk (bahan, kemasan, dan operasional per pack). Untung reseller diasumsikan menjual di harga jual sendiri.</p>'}
+function hargaPage(){const C=calc(S),rec=Math.ceil(C.hpp/(1-(S.tm||40)/100)/100)*100,hs=[...new Set([2000,2500,3000,3500,4000,S.harga])].sort((a,b)=>a-b).map(h=>sim(S,h)),best=Math.max(...hs.map(x=>x.laba));
+ return'<h2>Harga Jual dan BEP</h2><div class="box"><div class="row">'+[2000,2500,3000,3500,4000].map(h=>'<button class="'+(S.harga==h?'b':'g')+'" onclick="S.harga='+h+';save();render()">'+rp(h)+'</button>').join('')+'</div><div class="form"><label>Harga manual (Rp)<input id="hm" type="number" min="0" value="'+S.harga+'" onchange="setH()"></label><label>Target margin (%)<input id="tm" type="number" min="0" max="95" value="'+(S.tm||40)+'" onchange="setTm()"></label></div></div>'+
+ '<div class="grid">'+card('HPP per pack',rp(C.hpp))+card('Untung per pack',rp(S.harga-C.hpp))+card('Margin',(S.harga?(S.harga-C.hpp)/S.harga*100:0).toFixed(1)+'%')+card('Omzet jika habis',rp(S.harga*C.made))+card('Laba total',rp(C.est))+card('Rekomendasi harga',rp(rec),'HPP + margin '+(S.tm||40)+'%')+'</div>'+
+ '<h3>BEP</h3><div class="box">'+(C.mg<=0?'<span class="warn">Peringatan: harga jual tidak menutup biaya variabel per pack ('+rp(C.varU)+'). BEP tidak tercapai.</span>':'Biaya tetap '+rp(C.fix)+' / (harga '+rp(S.harga)+' - biaya variabel '+rp(C.varU)+') = <b>'+C.bep+' pack</b><br>Omzet saat BEP: '+rp(C.bep*S.harga)+'. Terjual: '+C.sold+' pack ('+Math.min(100,Math.round(C.sold/C.bep*100))+'% dari BEP). Sisa pack setelah BEP: '+Math.max(0,C.made-C.bep)+'.')+'</div>'+
+ '<h3>Simulasi harga</h3>'+tbl(['Harga jual','Omzet','BEP','Keuntungan'],hs.map(x=>[rp(x.h)+(x.laba==best?' (terbaik)':''),rp(x.omzet),x.bep==null?'<span class="warn">tidak tercapai</span>':x.bep+' pack',rp(x.laba)]))+beratSim()}
+const setH=()=>{const x=+v('hm');if(x>=0&&!isNaN(x)){S.harga=x;save();render()}},setTm=()=>{const x=+v('tm');if(x>=0&&x<95){S.tm=x;save();render()}};
+function stokPage(){const C=calc(S),tr=(a,f)=>tbl(a[0],a[1].map(f),0);
+ return'<h2>Stok dan Laporan</h2><h3>Bahan</h3>'+tr([['Bahan','Beli','Terpakai','Sisa','Nilai sisa'],C.mats],m=>[esc(m.b.nama),m.b.gram+' g',m.used+' g',m.left+' g',rp(m.val)])+'<h3>Kemasan</h3>'+tr([['Kemasan','Isi','Terpakai','Sisa','Nilai sisa'],C.packs],m=>[esc(m.k.nama),m.k.isi,m.used,m.left,rp(m.val)])+'<h3>Produk jadi</h3>'+tr([['Produk','Diproduksi','Terjual','Sisa'],C.fin],f=>[esc(f.p.nama),f.p.packs,f.sold,f.left])+
+ '<h3>Peringatan</h3><div class="box">'+(evalu(C)||'Tidak ada.')+'</div><h3>Laporan keuangan ('+today()+')</h3>'+tbl(['Pos','Nilai'],[['Total modal pembelian (bahan+kemasan)',C.buyTotal+C.packTotal],['Pembelian peralatan',C.assetBuy],['Biaya operasional tunai',C.opsCash],['Total pengeluaran (uang keluar)',C.cashOut],['Penyusutan peralatan (beban, bukan uang keluar)',C.dep],['Total biaya operasional (termasuk penyusutan)',C.ops],['Nilai buku peralatan',C.bookVal],['Total omzet / pemasukan',C.omzet],['HPP bahan+kemasan terjual',C.cogs],['Laba kotor',C.gross],['Laba bersih estimasi',C.net],['Saldo kas',C.kas],['Nilai persediaan',C.invVal]].map(r=>[r[0],rp(r[1])]))+'<p class="mut">Omzet = penjualan bersih. Laba = omzet dikurangi biaya. Kas = uang masuk dikurangi uang keluar.</p>'}
+function dataPage(){const t=selfTest();return'<h2>Data</h2><div class="box"><p>Cadangan: salin teks JSON di bawah dan simpan. Untuk memulihkan, tempel JSON lalu tekan Impor.</p><textarea id="js">'+esc(JSON.stringify(S))+'</textarea><div class="row"><button class="b" onclick="navigator.clipboard&&navigator.clipboard.writeText(v(\'js\'));MSG=\'Disalin.\';render()">Salin</button><button class="g" onclick="imp()">Impor</button><button class="g x" onclick="rst()">'+(CF=='rst'?'Yakin reset ke data demo?':'Reset ke data demo')+'</button></div></div><h3>Uji perhitungan data demo</h3><div class="box">'+t.map(x=>'<div class="'+(x[1]?'ok':'warn')+'">'+(x[1]?'Lulus':'Gagal')+': '+x[0]+'</div>').join('')+'</div>'}
+function imp(){try{const d=JSON.parse(v('js'));if(!d||!Array.isArray(d.buy)||!Array.isArray(d.prod)||!Array.isArray(d.sale)||!Array.isArray(d.pack)||!Array.isArray(d.cost))throw 0;S=d;S.aset=S.aset||[];MSG='Data dipulihkan.';save();render()}catch(e){err('JSON tidak valid.')}}
+function rst(){if(CF!='rst'){CF='rst';return render()}CF=null;S=demo();MSG='Data demo dimuat.';save();render()}
+
+/* ===== LAPORAN & UNDUHAN ===== */
+let DL=null;
+function repRows(){const C=calc(S),d=today(),pn=id=>{const p=S.prod.find(x=>x.id==id);return p?p.nama:'(dihapus)'};
+ return{
+ 'Keuangan':[['Pos','Nilai (Rp)'],['Tanggal laporan',d],['Total modal pembelian (bahan+kemasan)',C.buyTotal+C.packTotal],['Pembelian peralatan',C.assetBuy],['Biaya operasional tunai',C.opsCash],['Total pengeluaran (uang keluar)',C.cashOut],['Penyusutan peralatan (beban)',C.dep],['Total biaya operasional (termasuk penyusutan)',C.ops],['Nilai buku peralatan',C.bookVal],['Total omzet / pemasukan',C.omzet],['HPP bahan+kemasan terjual',C.cogs],['Laba kotor',C.gross],['Laba bersih estimasi',C.net],['Saldo kas',C.kas],['Nilai persediaan',C.invVal],['Total biaya produksi',C.prodCost],['Pack dihasilkan',C.made],['HPP per pack',C.hpp],['Harga jual per pack',S.harga],['BEP (pack)',C.bep==null?'Tidak tercapai':C.bep],['Rumus','Omzet = qty x harga - diskon. Laba kotor = omzet - HPP bahan+kemasan terjual. Laba bersih = laba kotor - biaya operasional. Kas = omzet - pembelian - operasional. HPP = (bahan + kemasan terpakai + operasional) / pack.']],
+ 'Pembelian':[['Tanggal','Bahan','Kategori','Harga','Berat (g)','Harga per gram','Sisa (g)','Keterangan'],...S.buy.map(b=>[b.tanggal,b.nama,b.kategori,b.harga,b.gram,b.harga/b.gram,b.gram-usedMat(b.id),b.ket])],
+ 'Produksi':[['Tanggal','Produk','Pack','Gram per pack','Biaya bahan','Biaya kemasan','HPP bahan+kemasan per pack'],...S.prod.map(p=>[p.tgl,p.nama,p.packs,p.gpp,p.matCost,p.packCost,(p.matCost+p.packCost)/p.packs])],
+ 'Analisis Biaya':[['Besaran','Nilai','Rumus'],...ekoRows(C,S.harga).map(r=>[r[0],r[1]==null?'-':r[1],r[2]])],
+ 'Peralatan':[['Nama','Harga','Umur (bulan)','Nilai sisa','Penyusutan per bulan','Bulan dipakai','Penyusutan periode ini','Nilai buku'],...(S.aset||[]).map(a=>{const m=(a.harga-a.sisa)/a.umur,s=m*Math.min(a.bulan,a.umur);return[a.nama,a.harga,a.umur,a.sisa,m,a.bulan,s,a.harga-s]})],
+ 'Penjualan':[['Tanggal','Produk','Jumlah','Harga','Diskon','Total','Metode','Keterangan'],...S.sale.map(s=>[s.tanggal,pn(s.pid),s.qty,s.harga,s.diskon,s.qty*s.harga-s.diskon,s.metode,s.ket])],
+ 'Stok':[['Jenis','Nama','Masuk','Terpakai / terjual','Sisa','Nilai sisa (Rp)'],...C.mats.map(m=>['Bahan (g)',m.b.nama,m.b.gram,m.used,m.left,m.val]),...C.packs.map(m=>['Kemasan',m.k.nama,m.k.isi,m.used,m.left,m.val]),...C.fin.map(f=>['Produk jadi (pack)',f.p.nama,f.p.packs,f.sold,f.left,f.left*f.unit])]}}
+async function dl(name,data){if(!DL)return err('Unduhan hanya tersedia di halaman terpublikasi claude.ai.');try{await DL.save({filename:name,data});MSG='Berkas siap: '+name}catch(e){MSG=e&&e.code=='declined'?'Unduhan dibatalkan.':'Unduhan tidak tersedia di tampilan ini.'}render()}
+function dlXlsx(){if(typeof XLSX=='undefined')return err('Pustaka Excel belum termuat. Coba muat ulang halaman.');const R=repRows(),wb=XLSX.utils.book_new();Object.keys(R).forEach(n=>{const ws=XLSX.utils.aoa_to_sheet(R[n]);ws['!cols']=R[n][0].map((_,i)=>({wch:i==0?24:18}));XLSX.utils.book_append_sheet(wb,ws,n)});dl('SnackBiz-Laporan-'+today()+'.xlsx',XLSX.write(wb,{bookType:'xlsx',type:'array'}))}
+function dlCsv(){const q=c=>'"'+String(c).replace(/"/g,'""')+'"';dl('SnackBiz-Keuangan-'+today()+'.csv','\ufeff'+repRows().Keuangan.map(r=>r.map(q).join(',')).join('\r\n'))}
+function dlJson(){dl('SnackBiz-Cadangan-'+today()+'.json',JSON.stringify(S,null,1))}
+function dlHtml(){const R=repRows(),n=x=>typeof x=='number'?x.toLocaleString('id-ID',{maximumFractionDigits:2}):esc(x);dl('SnackBiz-Laporan-'+today()+'.html','<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Laporan SnackBiz '+today()+'</title><style>body{font:14px Arial,sans-serif;margin:24px;color:#111}table{border-collapse:collapse;width:100%;margin-bottom:18px}td,th{border:1px solid #bbb;padding:5px 8px;text-align:left;vertical-align:top}th{background:#ffc400}</style></head><body><h1>Laporan SnackBiz Calculator</h1><p>Dibuat: '+today()+'. Cetak halaman ini lalu pilih Simpan sebagai PDF.</p>'+Object.keys(R).map(k=>'<h2>'+k+'</h2><table><tr>'+R[k][0].map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr>'+R[k].slice(1).map(r=>'<tr>'+r.map(c=>'<td>'+n(c)+'</td>').join('')+'</tr>').join('')+'</table>').join('')+'</body></html>')}
+function lapPage(){const R=repRows().Keuangan;return'<h2>Laporan</h2><div class="box"><p>Unduh laporan lengkap: keuangan, pembelian, produksi, penjualan, dan stok, lengkap dengan tanggal dan rumus.</p><div class="row"><button class="b" onclick="dlXlsx()">Unduh Excel (.xlsx)</button><button class="g" onclick="dlHtml()">Laporan cetak / PDF (.html)</button><button class="g" onclick="dlCsv()">Keuangan (.csv)</button><button class="g" onclick="dlJson()">Cadangan data (.json)</button></div>'+(DL?'':'<p class="warn">Fitur unduh belum aktif di tampilan ini. Buka halaman lewat tautan claude.ai.</p>')+'<p class="mut">Untuk PDF: buka berkas .html hasil unduhan, lalu Cetak dan pilih Simpan sebagai PDF.</p></div>'+tbl(R[0],R.slice(1).map(r=>[esc(r[0]),typeof r[1]=='number'?rp(r[1]):esc(r[1])]),0)}
+const PG=[['dash','Dashboard',dash],['buy','Bahan',()=>crud('buy')],['pack','Kemasan',()=>crud('pack')],['cost','Biaya',()=>crud('cost')],['aset','Peralatan',asetPage],['prod','Produksi',prodPage],['eko','Analisis Biaya',ekoPage],['harga','Harga & BEP',hargaPage],['res','Reseller',resPage],['sale','Penjualan',()=>crud('sale')],['stok','Stok & Laporan',stokPage],['lap','Laporan',lapPage],['data','Data',dataPage]];
+function render(){$('#nav').innerHTML=PG.map(p=>'<button class="'+(p[0]==PAGE?'on':'')+'" onclick="PAGE=\''+p[0]+'\';ED=null;CF=null;MSG=\'\';render()">'+p[1]+'</button>').join('');
+ $('#app').innerHTML=(MSG?'<div class="msg">'+esc(MSG)+'</div>':'')+PG.find(p=>p[0]==PAGE)[2]()}
+render();
+try{claude.use('downloads').then(d=>{DL=d;if(PAGE=='lap')render()}).catch(()=>{})}catch(e){}
+</script></body></html>
